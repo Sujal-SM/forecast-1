@@ -1,0 +1,8 @@
+{
+  "name": "delhi-aqi-forecast",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Delhi next-day AQI forecast and pollution day types (MLDA project)",
+  "scripts": { "dev": "node dev-server.js" },
+  "engines": { "node": ">=18" }
+}

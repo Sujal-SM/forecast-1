@@ -1,0 +1,9 @@
+{
+  "framework": null,
+  "outputDirectory": "public",
+  "functions": {
+    "api/forecast.js": { "memory": 1024, "maxDuration": 10 },
+    "api/meta.js": { "memory": 1024, "maxDuration": 10 },
+    "api/today.js": { "memory": 1024, "maxDuration": 30 }
+  }
+}

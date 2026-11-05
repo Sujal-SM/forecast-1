@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Delhi AQI Forecast</title>
+<meta name="description" content="Next-day AQI forecast and pollution day types for Delhi, built on CPCB data 2015 to 2020.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --paper: #FBFBFA; --panel: #FFFFFF; --ink: #232A31; --muted: #5E6871; --line: #E1E4E7; --soft: #F1F3F4;
+  --teal: #0F6E6A; --teal-soft: #DCEFED; --focus: #0F6E6A;
+  --good: #55A84F; --sat: #A3C853; --mod: #E9D93A; --poor: #F29C33; --vpoor: #E93F33; --severe: #AF2D24;
+  --smog: #8E2C2C; --dust: #C9900E; --monsoon: #17A3A0;
+  --font: "Bricolage Grotesque", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #15191D; --panel: #1C2227; --ink: #E7EBEE; --muted: #9AA5AE; --line: #2D353C; --soft: #232A30;
+    --teal: #4FC2BC; --teal-soft: #173C3A; --focus: #4FC2BC; --smog: #C96A62; --dust: #E3B23C; --monsoon: #4FC2BC;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #15191D; --panel: #1C2227; --ink: #E7EBEE; --muted: #9AA5AE; --line: #2D353C; --soft: #232A30;
+  --teal: #4FC2BC; --teal-soft: #173C3A; --focus: #4FC2BC; --smog: #C96A62; --dust: #E3B23C; --monsoon: #4FC2BC;
+}
+:root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+a { color: var(--teal); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+/* Top bar */
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); border-bottom: 1px solid var(--line); }
+.topbar { display: flex; align-items: center; gap: 24px; min-height: 64px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 10px; text-decoration: none; color: var(--ink); }
+.brand b { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; }
+.brand span { color: var(--muted); font-size: 14px; }
+nav.tabs { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+nav.tabs a { text-decoration: none; color: var(--muted); font-weight: 600; font-size: 15px; padding: 8px 14px; border-radius: 999px; }
+nav.tabs a:hover { color: var(--ink); background: var(--soft); }
+nav.tabs a[aria-current="page"] { color: var(--paper); background: var(--ink); }
+.status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.status i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: inline-block; }
+.status.local i { background: var(--dust); }
+
+/* Sky band: the forecast drawn as Delhi's sky */
+.sky { position: relative; overflow: hidden; border-radius: 22px; margin-top: 24px; min-height: 360px; color: #1E262C;
+  background: linear-gradient(180deg, var(--sky-top, #A9C7D6) 0%, var(--sky-low, #E8EEE6) 78%); transition: background 0.9s ease; }
+.sky .haze { position: absolute; inset: 0; background: var(--haze-col, #B9A27F); opacity: var(--haze, 0); transition: opacity 0.9s ease, background 0.9s ease; pointer-events: none; }
+.sky svg.skyline { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 150px; fill: #2B2420; opacity: var(--city, 0.8); transition: opacity 0.9s ease; }
+.sky .fore { position: absolute; left: 0; right: 0; bottom: 0; height: 70px; background: linear-gradient(180deg, transparent, rgba(0,0,0,0.12)); }
+.sky .content { position: relative; z-index: 2; padding: 28px 32px 170px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start; }
+.sky.dark-text { color: #1E262C; } .sky.light-text { color: #FFFFFF; }
+.sky .when { font-size: 18px; font-weight: 600; margin: 0; }
+.sky .num { font-size: clamp(88px, 15vw, 168px); font-weight: 800; line-height: 0.9; letter-spacing: -0.04em; margin: 10px 0 6px; }
+.sky .cat { display: inline-flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 700; }
+.sky .cat i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.8); }
+.sky .sub { margin-top: 8px; font-size: 15px; opacity: 0.88; max-width: 52ch; }
+.picker { background: rgba(255,255,255,0.86); color: #1E262C; border-radius: 16px; padding: 16px; width: 290px; backdrop-filter: blur(6px); }
+.picker label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.picker input[type=date] { width: 100%; font: inherit; font-size: 16px; padding: 9px 10px; border: 1px solid #C9CFD3; border-radius: 10px; background: #fff; color: #1E262C; }
+.picker .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.chip { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 999px; border: 1px solid #C9CFD3; background: #fff; color: #1E262C; cursor: pointer; }
+.chip:hover { border-color: #0F6E6A; color: #0F6E6A; }
+.picker .note { font-size: 13px; margin-top: 10px; line-height: 1.4; }
+.picker .note.warn { color: #8A4B00; } .picker .note.ok { color: #0F5E3A; }
+
+/* Panels */
+.grid { display: grid; gap: 20px; margin: 20px 0; }
+.g-3 { grid-template-columns: repeat(3, 1fr); } .g-2 { grid-template-columns: 1.6fr 1fr; } .g-2e { grid-template-columns: 1fr 1fr; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; min-width: 0; }
+.panel h2 { font-size: 18px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.panel p.hint { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+.fig { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
+.fig small { font-size: 16px; font-weight: 600; color: var(--muted); letter-spacing: 0; margin-left: 6px; }
+.lbl { color: var(--muted); font-size: 14px; }
+.delta { font-size: 14px; font-weight: 600; margin-top: 4px; }
+.type-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: 0; }
+.chart-box { position: relative; height: 290px; }
+.chart-box.tall { height: 340px; } .chart-box.short { height: 230px; }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; font-size: 13.5px; }
+tr.hl td { font-weight: 700; background: var(--teal-soft); }
+.scroll { overflow-x: auto; }
+.bar { height: 8px; border-radius: 4px; background: var(--soft); position: relative; min-width: 80px; }
+.bar b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--teal); }
+.member { display: grid; grid-template-columns: 140px 1fr 52px; align-items: center; gap: 12px; padding: 8px 0; font-size: 15px; }
+.member .bar { height: 10px; }
+.member.ens { font-weight: 700; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 12px; }
+
+/* What-if */
+.sliders { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 26px; }
+.sl label { display: flex; justify-content: space-between; font-size: 14.5px; font-weight: 600; }
+.sl label span { color: var(--muted); font-weight: 500; }
+.sl input[type=range] { width: 100%; accent-color: var(--teal); }
+.btn { font: inherit; font-weight: 700; font-size: 15px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.btn.primary { background: var(--teal); border-color: var(--teal); color: var(--paper); }
+.result-num { font-size: 76px; font-weight: 800; line-height: 1; letter-spacing: -0.04em; }
+.pill { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; padding: 4px 12px; border-radius: 999px; font-size: 15px; color: #1E262C; }
+
+/* Day types */
+.types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.type-card h3 { margin: 0 0 2px; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.type-card .dot { width: 16px; height: 16px; border-radius: 50%; }
+.type-card dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 14px 0 0; font-size: 14.5px; }
+.type-card dt { color: var(--muted); } .type-card dd { margin: 0; text-align: right; font-weight: 600; }
+.strip { display: grid; grid-template-rows: repeat(7, auto); grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; }
+.strip i { aspect-ratio: 1; border-radius: 2px; display: block; }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 10px; }
+.prose { max-width: 72ch; }
+.prose h3 { font-size: 17px; margin: 22px 0 6px; }
+.prose p, .prose li { color: var(--ink); font-size: 15.5px; }
+footer { color: var(--muted); font-size: 13.5px; padding: 26px 0 40px; border-top: 1px solid var(--line); margin-top: 30px; }
+.view[hidden], [hidden] { display: none !important; }
+.err { background: #FDECEA; color: #8A1C12; border-radius: 10px; padding: 10px 14px; font-size: 14.5px; margin-top: 12px; }
+.skeleton { color: var(--muted); padding: 40px 0; }
+
+@media (max-width: 900px) {
+  .g-3, .g-2, .g-2e, .types { grid-template-columns: 1fr; }
+  .sky .content { grid-template-columns: 1fr; padding: 22px 20px 150px; }
+  .picker { width: 100%; }
+  .sliders { grid-template-columns: 1fr; }
+  nav.tabs { margin-left: 0; }
+  header.top { position: static; }
+  .brand span { display: none; }
+  .topbar { gap: 10px; padding: 10px 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap topbar">
+    <a class="brand" href="#forecast"><b>Delhi AQI Forecast</b><span>next-day air quality forecast</span></a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#today">Today</a><a href="#forecast">History</a><a href="#whatif">What-if</a><a href="#daytypes">Day types</a><a href="#model">Model</a>
+    </nav>
+    <div class="status" id="status" title="Where forecasts are computed"><i></i><span>Connecting…</span></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- TODAY (live) -->
+  <section class="view" id="v-today" hidden aria-labelledby="t-when">
+    <div class="sky" id="sky-today">
+      <div class="haze"></div>
+      <svg class="skyline" viewBox="0 0 1200 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <path d="M0 150V118h40v-14h30v14h22V96h26v54zM118 150V108h18V90h8v-8h4v8h8v18h18v42z"/>
+        <path d="M200 150V112h70V98h60v14h70v38h-60v-26a20 20 0 0 0-40 0v26z"/>
+        <path d="M262 98h96v-8H262zM300 90V78h20v12z"/>
+        <path d="M470 150V128h30v-22h40v44zM560 150V120h50v30z"/>
+        <path d="M660 150l6-112 4-2 2-10 2 10 4 2 6 112z"/><path d="M664 92h20v4h-20zM662 120h24v4h-24z"/>
+        <path d="M730 150V124h44v-16h26v42zM820 150V116h22V104h30v46z"/>
+        <path d="M900 150c8-30 22-44 36-50 14 6 28 20 36 50zM930 150c6-26 14-40 22-46 8 6 16 20 22 46zM886 150c10-18 22-28 34-32-6 12-8 22-8 32z"/>
+        <path d="M1010 150V110h36V96h20v14h24v40zM1100 150V122h40v-10h22v38zM1160 150V104h40v46z"/>
+        <path d="M0 150h1200v-6H0z"/>
+      </svg>
+      <div class="fore"></div>
+      <div class="content">
+        <div>
+          <p class="when" id="t-when">Fetching today’s Delhi readings…</p>
+          <div class="num" id="t-num" aria-live="polite">–</div>
+          <div class="cat" id="t-cat"><i></i><span></span></div>
+          <p class="sub" id="t-sub"></p>
+        </div>
+        <div class="picker">
+          <label>Live data</label>
+          <p class="note" id="t-meta" style="margin-top:0">CPCB monitoring stations in Delhi, via OpenAQ.</p>
+          <div class="row"><button class="chip" id="t-refresh">Refresh now</button></div>
+          <p class="note" id="t-fresh"></p>
+        </div>
+      </div>
+    </div>
+    <div id="t-error"></div>
+    <div id="t-body">
+      <div class="grid g-3">
+        <div class="panel"><div class="lbl">Yesterday’s AQI (persistence guess)</div><div class="fig" id="t-yday">–</div><div class="delta lbl" id="t-yday-d"></div></div>
+        <div class="panel"><div class="lbl">Change the model expects</div><div class="fig" id="t-change">–</div><div class="delta lbl" id="t-change-d"></div></div>
+        <div class="panel"><div class="lbl">Stations used</div><div class="fig" id="t-stn">–</div><div class="delta lbl" id="t-stn-d"></div></div>
+      </div>
+      <div class="grid g-2">
+        <div class="panel"><h2>The last two weeks and today’s forecast</h2><p class="hint">City AQI from live station data in black, forecast in teal.</p>
+          <div class="chart-box"><canvas id="c-today" aria-label="Recent AQI and today’s forecast"></canvas></div></div>
+        <div class="panel"><h2>How today’s forecast is built</h2><p class="hint">Three models predict today’s AQI. The forecast is their average.</p>
+          <div id="t-members"></div></div>
+      </div>
+      <div class="panel"><h2>Yesterday’s readings against the national standard</h2><p class="hint">City average of the stations above. Limits are India’s 24-hour standards (8-hour for CO and O3).</p>
+        <div class="scroll"><table id="t-poll"><thead><tr><th>Pollutant</th><th>Yesterday</th><th>Standard</th><th>Ratio</th><th style="width:40%"></th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="panel prose" style="margin-top:20px">
+      <h2>About the live forecast</h2>
+      <p id="t-acc"></p>
+      <h3>How it works</h3><p>Each time the page loads, the server pulls daily averages for PM2.5, PM10, NO2, SO2, CO and O3 from Delhi’s CPCB stations for the last 18 days. It computes each station’s AQI with the CPCB formula, averages the stations, rebuilds the model’s inputs and runs the live model.</p>
+      <h3>Good to know</h3><ul>
+        <li>This live AQI is computed from daily station averages, so it can differ from the official CPCB bulletin, which uses hourly rolling values.</li>
+        <li>Days with no station data are filled from the day before, as in training. Filled days are listed above when they happen.</li>
+        <li>No weather or crop-fire data, so sudden spikes can be under-forecast.</li>
+        <li>An academic project. For health decisions, follow official CPCB and SAFAR forecasts.</li></ul>
+    </div>
+  </section>
+
+  <!-- FORECAST -->
+  <section class="view" id="v-forecast" aria-labelledby="h-forecast">
+    <div class="sky" id="sky">
+      <div class="haze"></div>
+      <svg class="skyline" viewBox="0 0 1200 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <path d="M0 150V118h40v-14h30v14h22V96h26v54zM118 150V108h18V90h8v-8h4v8h8v18h18v42z"/>
+        <path d="M200 150V112h70V98h60v14h70v38h-60v-26a20 20 0 0 0-40 0v26z"/>
+        <path d="M262 98h96v-8H262zM300 90V78h20v12z"/>
+        <path d="M470 150V128h30v-22h40v44zM560 150V120h50v30z"/>
+        <path d="M660 150l6-112 4-2 2-10 2 10 4 2 6 112z"/><path d="M664 92h20v4h-20zM662 120h24v4h-24z"/>
+        <path d="M730 150V124h44v-16h26v42zM820 150V116h22V104h30v46z"/>
+        <path d="M900 150c8-30 22-44 36-50 14 6 28 20 36 50zM930 150c6-26 14-40 22-46 8 6 16 20 22 46zM886 150c10-18 22-28 34-32-6 12-8 22-8 32z"/>
+        <path d="M1010 150V110h36V96h20v14h24v40zM1100 150V122h40v-10h22v38zM1160 150V104h40v46z"/>
+        <path d="M0 150h1200v-6H0z"/>
+      </svg>
+      <div class="fore"></div>
+      <div class="content">
+        <div>
+          <p class="when" id="f-when">Loading forecast…</p>
+          <div class="num" id="f-num" aria-live="polite">–</div>
+          <div class="cat" id="f-cat"><i></i><span></span></div>
+          <p class="sub" id="f-sub"></p>
+        </div>
+        <div class="picker">
+          <label for="date">Forecast made at the end of (Jan 2015 to Jul 2020)</label>
+          <input type="date" id="date">
+          <div class="row">
+            <button class="chip" data-date="2019-11-02">Smog peak 2019</button>
+            <button class="chip" data-date="2019-08-15">Monsoon</button>
+            <button class="chip" data-date="2020-04-10">Lockdown</button>
+          </div>
+          <p class="note" id="f-note"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid g-3">
+      <div class="panel"><div class="lbl">What actually happened</div><div class="fig" id="f-actual">–</div><div class="delta" id="f-actual-d"></div></div>
+      <div class="panel"><div class="lbl">Persistence guess (tomorrow = today)</div><div class="fig" id="f-pers">–</div><div class="delta" id="f-pers-d"></div></div>
+      <div class="panel"><div class="lbl">Today’s pollution day type</div><div class="fig" style="font-size:28px;margin-top:6px" id="f-type">–</div><div class="delta lbl" id="f-type-d"></div></div>
+    </div>
+
+    <div class="grid g-2">
+      <div class="panel"><h2>The last 45 days and the forecast</h2><p class="hint">Observed AQI in black, forecast in teal. Bands are the CPCB categories.</p>
+        <div class="chart-box"><canvas id="c-hist" aria-label="AQI history chart"></canvas></div></div>
+      <div class="panel"><h2>How the forecast is built</h2><p class="hint">Three models each predict tomorrow’s AQI. The forecast is their average.</p>
+        <div id="f-members"></div>
+        <p class="hint" style="margin-top:14px">Biggest drivers on the test year: today’s PM2.5, then today’s AQI and PM10.</p></div>
+    </div>
+
+    <div class="panel"><h2>Today’s readings against a typical day</h2><p class="hint">Concentrations on the forecast day, compared with the median of the training years.</p>
+      <div class="scroll"><table id="f-poll"><thead><tr><th>Pollutant</th><th>Today</th><th>Typical day</th><th>Ratio</th><th style="width:40%"></th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- WHAT-IF -->
+  <section class="view" id="v-whatif" hidden aria-labelledby="h-whatif">
+    <div class="grid g-2" style="margin-top:28px">
+      <div class="panel">
+        <h2 id="h-whatif">What if today’s air were different?</h2>
+        <p class="hint">Start from a real day and move the sliders. Every input is rebuilt from your values (ratios, rolling averages, lags) and all three models run again.</p>
+        <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:18px">
+          <div><label class="lbl" for="w-date" style="display:block">Start from</label><input type="date" id="w-date" class="btn" style="font-weight:500"></div>
+          <button class="btn" id="w-reset">Reset to real readings</button>
+        </div>
+        <div class="sliders" id="w-sliders"></div>
+      </div>
+      <div class="panel" aria-live="polite">
+        <div class="lbl">Forecast for <span id="w-target">–</span></div>
+        <div class="result-num" id="w-num">–</div>
+        <div style="margin:8px 0 16px"><span class="pill" id="w-cat"></span></div>
+        <div class="lbl">With the real readings</div><div style="font-size:22px;font-weight:700" id="w-base">–</div>
+        <div class="delta" id="w-delta"></div>
+        <div class="lbl" style="margin-top:16px">Day type with these readings</div><div style="font-size:20px;font-weight:700" id="w-type">–</div>
+        <div id="w-members" style="margin-top:16px"></div>
+        <div id="w-err"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAY TYPES -->
+  <section class="view" id="v-daytypes" hidden>
+    <div style="margin:28px 0 6px" class="prose"><h2 style="font-size:26px;margin:0">Three kinds of pollution day</h2>
+      <p class="lbl">K-Means (k = 3) on a PCA projection of log-scaled, drift-screened pollutant readings. Names come from each group’s measured profile.</p></div>
+    <div class="types" id="types"></div>
+    <div class="grid g-2e">
+      <div class="panel"><h2>Which type each month brings</h2><p class="hint">Share of training days (2015 to mid-2019) in each type.</p><div class="chart-box tall"><canvas id="c-share"></canvas></div></div>
+      <div class="panel"><h2>Every test-year day, by type</h2><p class="hint">2 Jul 2019 to 1 Jul 2020. One square per day, one column per week.</p><div class="strip" id="strip"></div><div class="legend" style="justify-content:space-between"><span>Jul 2019</span><span>Jan 2020</span><span>Jul 2020</span></div><div class="legend" id="strip-legend"></div></div>
+    </div>
+    <div class="panel"><h2>How the clustering methods compared</h2><p class="hint">All scores measured in the same 6-D PCA space. DBSCAN scores are on non-noise days only.</p>
+      <div class="scroll"><table id="t-clusters"></table></div></div>
+  </section>
+
+  <!-- MODEL -->
+  <section class="view" id="v-model" hidden>
+    <div class="grid g-3" style="margin-top:28px">
+      <div class="panel"><div class="lbl">Test-year MAE (366 days)</div><div class="fig" id="m-mae">–</div><div class="delta lbl" id="m-mae-d"></div></div>
+      <div class="panel"><div class="lbl">Test-year R²</div><div class="fig" id="m-r2">–</div><div class="delta lbl" id="m-r2-d"></div></div>
+      <div class="panel"><div class="lbl">Correct CPCB category</div><div class="fig">74.6%<small>of days</small></div><div class="delta lbl">Persistence: 68.9%. Every miss was one category away.</div></div>
+    </div>
+    <div class="panel"><h2>Actual vs forecast on the test year</h2><p class="hint">The model never saw these days during training or model selection.</p><div class="chart-box tall"><canvas id="c-test"></canvas></div></div>
+    <div class="grid g-2e">
+      <div class="panel"><h2>Every approach, same test days</h2><p class="hint">Selected by time-series cross-validation on 2015 to mid-2019, not by test score.</p><div class="chart-box tall"><canvas id="c-mae"></canvas></div></div>
+      <div class="panel"><h2>What the model relies on</h2><p class="hint">Rise in test MAE when one input is shuffled (Gradient Boosting member).</p><div class="chart-box tall"><canvas id="c-imp"></canvas></div></div>
+    </div>
+    <div class="panel"><h2>Full results</h2><div class="scroll"><table id="t-results"></table></div></div>
+    <div class="panel prose" style="margin-top:20px">
+      <h2>How it works</h2>
+      <h3>Data</h3><p>Daily Delhi readings from CPCB (Kaggle “Air Quality Data in India 2015-2020”): 2,009 days, 11 pollutants and AQI. Gaps are filled from earlier days only, and days without a recorded AQI are never used as targets.</p>
+      <h3>Forecast</h3><p>Inputs are known at the end of the forecast day: today’s pollutants, AQI from today and 1, 2 and 6 days ago, 3, 7 and 14-day averages, the season of the target day, and a Diwali flag. Linear Regression, Random Forest and Gradient Boosting each predict, and the forecast is their average. Training covers Jan 2015 to Jun 2019; Jul 2019 to Jun 2020 is the untouched test year.</p>
+      <h3>Day types</h3><p>Days are grouped by their pollutant mix. Using the day type as a forecasting input did not improve accuracy, so it is shown for understanding, not used in the forecast.</p>
+      <h3>Limitations</h3><ul><li>No weather or crop-fire data, so sudden spikes are under-forecast. The largest miss was 209 AQI points on 3 Nov 2019.</li><li>Data end on 1 Jul 2020, and the test year includes the COVID-19 lockdown.</li><li>Dates before Jul 2019 are training days, so those forecasts are in-sample and look better than real use.</li><li>An academic project. For health decisions, follow official CPCB and SAFAR forecasts.</li></ul>
+    </div>
+  </section>
+</main>
+<footer><div class="wrap">MLDA project. Forecasts are computed by the same trained models used in the report. Data: Central Pollution Control Board via Kaggle.</div></footer>
+<!--SCRIPTS-->
+</body>
+</html>
